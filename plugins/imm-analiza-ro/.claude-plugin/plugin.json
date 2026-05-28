@@ -1,0 +1,26 @@
+{
+  "name": "imm-analiza-ro",
+  "version": "0.1.0",
+  "description": "Analiză preliminară IMM (autonomă/parteneră/legată) conform Legii 346/2004 + Recomandării CE 2003/361/EC. Scrapează date din termene.ro prin Chrome MCP, aplică arborele decizional al legăturilor, completează automat Declaratie IMM (Sheet 2 + Sheet 4), Anexa 3 (declarație încadrare) și Anexa 4 (calcul partenere/legate) fără să spargă formulele existente, și produce o sinteză 1-3 pagini cu verdict 'există legături: DA/NU/NECLAR'.",
+  "author": {
+    "name": "Paul Petrov",
+    "email": "ecofin@consultant.com",
+    "url": "https://romactiv.ro"
+  },
+  "homepage": "https://github.com/paul-petrov/imm-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "imm",
+    "sme-classification",
+    "romania",
+    "legea-346-2004",
+    "ec-recommendation-2003-361",
+    "termene.ro",
+    "chrome-mcp",
+    "fonduri-europene",
+    "pnrr",
+    "consulting"
+  ],
+  "commands": "./commands",
+  "skills": "./skills"
+}
