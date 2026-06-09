@@ -75,6 +75,7 @@ Doar pentru cazurile detectate ca ambigue:
 - `scripts/fill_xlsx.py` → `03_Declaratie_IMM_<CUI>_completata.xlsx`
 - `scripts/fill_docx_anexa3.py` → `04_Anexa-3-completata.docx`
 - `scripts/fill_docx_anexa4.py` → `05_Anexa-4-completata.docx`
+- `scripts/fill_analiza_imm.py` → `06_Analiza_incadrare_IMM_<denumire>.xlsx` — **workbook de analiză completă** (format RBC contractare): harta grupului (asociați, cote, administrator, relații comerciale DA/NU, CAEN principal+preponderent), verdict legături, tabele financiare consolidate per an (CA + active în lei ȘI euro, formule live `=lei/curs`), categoria IMM finală. Folosește cursurile BNR 31.dec din `reference/06-format-analiza-imm.md` (2023=4,9746; 2024=4,9741; 2025=5,0985). Vezi `reference/06-format-analiza-imm.md` pentru API + structură. Acoperă număr variabil de firme și ani (se construiește de la zero, nu e template fix).
 
 ### 9. Sinteza
 - `scripts/sinteza.py` → `02_Sinteza_<CUI>.md` (afișat inline) + `02_Sinteza_<CUI>.docx`
@@ -96,7 +97,7 @@ Doar pentru cazurile detectate ca ambigue:
 ## Ce să NU faci
 
 - NU începe analiza fără preflight reușit.
-- NU livra fișiere fără ca toate cele 5 (raw, sinteză MD+DOCX, Excel, Anexa 3, Anexa 4) să fie scrise.
+- NU livra fișiere fără ca toate cele 6 (raw, sinteză MD+DOCX, Excel Declarație, Anexa 3, Anexa 4, Analiza încadrare IMM) să fie scrise.
 - NU bifează mai mult de o căsuță în Anexa 3.
 - NU ghici % sau financiare lipsă — întotdeauna întreabă sau marchează NECUNOSCUT.
 - NU folosi `wb.save(template_path)` — întotdeauna `out_path` nou.
@@ -109,3 +110,4 @@ Doar pentru cazurile detectate ca ambigue:
 - `reference/03-arbore-decizional.md` — logica distilată cu pseudocod
 - `reference/04-termene-ro-selectors.md` — selectori DOM pentru Chrome MCP
 - `reference/05-cazuri-neclare.md` — taxonomia ambiguităților + întrebări sample
+- `reference/06-format-analiza-imm.md` — formatul workbook-ului de analiză completă + API generator + curs BNR
