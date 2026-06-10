@@ -1,7 +1,7 @@
 {
   "name": "imm-analiza-ro",
-  "version": "0.2.0",
-  "description": "Analiză preliminară IMM (autonomă/parteneră/legată) conform Legii 346/2004 + Recomandării CE 2003/361/EC. Scrapează date din termene.ro prin Chrome MCP, aplică arborele decizional al legăturilor, completează automat Declaratie IMM (Sheet 2 + Sheet 4), Anexa 3 (declarație încadrare) și Anexa 4 (calcul partenere/legate) fără să spargă formulele existente, generează workbook-ul de analiză completă (harta grupului + financiare consolidate lei/euro per an), și produce o sinteză 1-3 pagini cu verdict 'există legături: DA/NU/NECLAR'.",
+  "version": "0.3.0",
+  "description": "Analiză preliminară IMM (autonomă/parteneră/legată) conform Legii 346/2004 + Recomandării CE 2003/361/EC. Scrapează date din termene.ro prin Chrome MCP (asociați/acționari + persoane autorizate), aplică arborele decizional al legăturilor, completează automat Declaratie IMM (Sheet 2 + Sheet 4), Anexa 3 (declarație încadrare, semnatar lângă etichetă) și Anexa 4 (calcul partenere/legate) fără să spargă formulele existente, generează workbook-ul obligatoriu de analiză completă (harta grupului + financiare consolidate lei/euro/mii per an, curs BNR 31 dec + Recomandare Claude), și produce o sinteză 1-3 pagini cu verdict 'există legături: DA/NU/NECLAR'.",
   "author": {
     "name": "Paul Petrov",
     "email": "ecofin@consultant.com",

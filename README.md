@@ -63,12 +63,13 @@ Sau în limbaj natural:
 > Analizează firma cu CUI 14186770 pentru încadrare IMM.
 
 Plugin-ul va:
-1. Confirma scope-ul (CUI-uri, an, folder output).
-2. Scrape termene.ro pentru solicitant + asociați + alte firme ale asociaților.
+1. Confirma scope-ul la începutul fiecărui task (CUI-uri, program/apel, an + curs BNR ultima zi a anului, livrabile, semnatar Anexa 3, folder output).
+2. Scrape termene.ro pentru solicitant + asociați + administratori (AMBELE secțiuni: „Asociați/acționari" și „Persoane autorizate") + alte firme ale acestora.
 3. Aplica arborele decizional (Legea 346/2004 + Recomandarea CE 2003/361).
 4. Întreba clarificări pentru cazuri ambigue (rude, piață învecinată, investitori-excepție).
-5. Completa automat Declarație IMM + Anexa 3 + Anexa 4.
-6. Produce o sinteză 1-3 pagini cu verdict.
+5. Completa automat Declarație IMM + Anexa 3 (semnatarul lângă eticheta „Numele") + Anexa 4.
+6. Genera workbook-ul „Analiza încadrare IMM" (livrabil obligatoriu): harta grupului, verdict, financiare în lei/euro/mii lei/mii euro, categoria IMM, Recomandare Claude.
+7. Produce o sinteză 1-3 pagini cu verdict.
 
 Output-ul ajunge în `<cwd>/analize-imm/<YYYY-MM-DD>_<CUI-solicitant>/`.
 

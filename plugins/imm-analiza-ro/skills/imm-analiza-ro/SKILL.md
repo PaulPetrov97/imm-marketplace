@@ -10,7 +10,13 @@ description: Analiză preliminară de încadrare IMM (autonomă/parteneră/legat
 La activare, după ce ai primit lista de CUI-uri (slash command `/imm CUI1 CUI2 ...` sau frază naturală):
 
 1. Rulează `scripts/preflight.py` pentru a verifica: Chrome MCP conectat, `openpyxl` instalat, `python-docx` instalat. Dacă oricare eșuează → STOP cu mesaj clar în română și instrucțiuni de remediere (`pip install openpyxl python-docx` / instalează extensia Claude in Chrome).
-2. Confirmă prin AskUserQuestion: (a) primul CUI este solicitantul? (b) anul de referință (default = anul curent − 1, ex. 2024); (c) folder output (default = cwd `analize-imm/<YYYY-MM-DD>_<CUI-solicitant>/`).
+2. **OBLIGATORIU la ÎNCEPUTUL FIECĂRUI task** — confirmă prin AskUserQuestion (1-2 runde, grupate):
+   - (a) primul CUI este solicitantul? + lista CUI suspectate;
+   - (b) **programul / apelul de finanțare** pentru care se face analiza (context — apare în antetul workbook-ului de analiză);
+   - (c) anul de referință (default = ultimul exercițiu închis) + confirmă **cursul BNR din ULTIMA ZI a anului respectiv** (31 decembrie — vezi tabelul din `reference/06-format-analiza-imm.md`; pentru ani noi cere/caută cursul oficial);
+   - (d) **formatul / livrabilele dorite**: toate 6 (default) sau doar un subset (ex. doar analiza + sinteza);
+   - (e) **semnatarul Anexei 3** — numele și funcția persoanei care întocmește/semnează declarația (poate diferi de reprezentantul legal);
+   - (f) folder output (default = cwd `analize-imm/<YYYY-MM-DD>_<CUI-solicitant>/`).
 3. Probă Chrome MCP: `mcp__Claude_in_Chrome__list_connected_browsers` → navighează la `https://termene.ro/` → detectează dacă utilizatorul este autentificat (Premium/PartnerSCAN) sau nu.
 
 ## Invariante CRITICE — niciodată călcate
@@ -22,6 +28,11 @@ La activare, după ce ai primit lista de CUI-uri (slash command `/imm CUI1 CUI2 
 5. **NU inventa date.** Dacă termene.ro lipsește un câmp, marchează `NECUNOSCUT` în JSON-ul de extragere și escaladează la utilizator prin AskUserQuestion sau flag `NECLAR` în sinteză.
 6. **NU ghici legăturile ambigue.** Cazurile de "acționare concertată" (rude), "piață învecinată" (CAEN diferite), "investitor excepție" (business angel / universitate / fond) → întotdeauna AskUserQuestion. Dacă utilizatorul nu știe → flag NECLAR explicit în output.
 7. **Audit log obligatoriu.** Fiecare analiză scrie `audit.log` cu timestamp, URL-uri scrapate, decizii, clarificări utilizator.
+8. **Verifică ÎNTOTDEAUNA AMBELE secțiuni termene.ro: „Asociați/acționari" ȘI „Persoane autorizate".** Administratorii pot crea legături fără participație la capital (ex. administrator comun care deține 100% altă firmă-acționar). Extrage și „conexiuni cu alte firme" pentru AMBELE categorii + „Lista firmelor în care <firma> este acționar".
+9. **Workbook-ul `06_Analiza_incadrare_IMM` este livrabil OBLIGATORIU** la fiecare analiză și include secțiunea **„Recomandare Claude"** (concluzie + ce rămâne de clarificat + varianta de declarare recomandată).
+10. **Curs valutar = cursul BNR din ULTIMA ZI a anului de referință** (31 decembrie). Niciodată curs mediu anual sau curs curent.
+11. **Format numeric românesc** în toate output-urile text: zecimale cu virgulă, mii cu punct (`1.234.567,89`) — folosește `fmt_ro()` din `sinteza.py`/`fill_analiza_imm.py`. În Excel: number_format standard (`#,##0.00`), separatorii vin din locale.
+12. **Anexa 3 — etichetele NU se șterg.** La „Numele" / „Funcția" din blocul de semnătură, valoarea se scrie LÂNGĂ etichetă (semnatarul = persoana care întocmește anexa, întrebată la pasul 1), nu în locul ei.
 
 ## Workflow — 10 pași
 
@@ -38,6 +49,7 @@ La activare, după ce ai primit lista de CUI-uri (slash command `/imm CUI1 CUI2 
 - `mcp__Claude_in_Chrome__get_page_text` + `find` pentru extrageri.
 - Salvează raw HTML/JSON în `01_raw/<CUI>.termene.json`.
 - Extrage schema: denumire, adresă, CAEN principal+secundare, reprezentant legal, financiare pe ultimii 3 ani, asociați (PF + PJ cu %).
+- **OBLIGATORIU — extrage AMBELE tabele**: „Asociați/acționari" **ȘI** „Persoane autorizate" (administratori), plus „Asociați/acționari și persoane autorizate — conexiuni cu alte firme" pentru AMBELE, plus „Lista firmelor în care <firma> este acționar". Administratorii fără participație pot lega firme (vezi invarianta 8).
 
 ### 4. Recursie controlată (BFS cu cycle detection)
 - Coadă inițială: solicitant.
@@ -73,9 +85,9 @@ Doar pentru cazurile detectate ca ambigue:
 
 ### 8. Completează documentele
 - `scripts/fill_xlsx.py` → `03_Declaratie_IMM_<CUI>_completata.xlsx`
-- `scripts/fill_docx_anexa3.py` → `04_Anexa-3-completata.docx`
+- `scripts/fill_docx_anexa3.py` → `04_Anexa-3-completata.docx` — pasează `semnatar_nume` + `semnatar_functie` (din întrebările de la pasul 1); etichetele „Numele"/„Funcția" rămân, valorile se scriu lângă ele.
 - `scripts/fill_docx_anexa4.py` → `05_Anexa-4-completata.docx`
-- `scripts/fill_analiza_imm.py` → `06_Analiza_incadrare_IMM_<denumire>.xlsx` — **workbook de analiză completă** (format RBC contractare): harta grupului (asociați, cote, administrator, relații comerciale DA/NU, CAEN principal+preponderent), verdict legături, tabele financiare consolidate per an (CA + active în lei ȘI euro, formule live `=lei/curs`), categoria IMM finală. Folosește cursurile BNR 31.dec din `reference/06-format-analiza-imm.md` (2023=4,9746; 2024=4,9741; 2025=5,0985). Vezi `reference/06-format-analiza-imm.md` pentru API + structură. Acoperă număr variabil de firme și ani (se construiește de la zero, nu e template fix).
+- `scripts/fill_analiza_imm.py` → `06_Analiza_incadrare_IMM_<denumire>.xlsx` — **workbook de analiză completă, livrabil OBLIGATORIU** (format RBC contractare): harta grupului (asociați + administratori/persoane autorizate, cote, relații comerciale DA/NU, CAEN principal+preponderent), verdict legături, tabele financiare consolidate per an (CA + active în **lei, euro, MII lei și MII euro** — coloanele derivate sunt formule live), categoria IMM finală și secțiunea **„Recomandare Claude"**. Cursul = BNR din ULTIMA ZI a anului (2022=4,9474; 2023=4,9746; 2024=4,9741; 2025=5,0985 — vezi `reference/06-format-analiza-imm.md`). Pasează `program=` (apelul de finanțare) și `recomandare=` (2-5 fraze: constatări + clarificări rămase + varianta de declarare recomandată). Acoperă număr variabil de firme și ani (se construiește de la zero, nu e template fix).
 
 ### 9. Sinteza
 - `scripts/sinteza.py` → `02_Sinteza_<CUI>.md` (afișat inline) + `02_Sinteza_<CUI>.docx`

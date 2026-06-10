@@ -26,13 +26,14 @@ Invocă skill-ul `imm-analiza-ro` pentru o analiză completă end-to-end de înc
 ## Workflow declanșat
 
 1. Preflight (Chrome MCP + Python deps).
-2. Confirmare scope (CUI, an, folder).
-3. Scrape solicitant + recursie controlată pe asociați.
+2. **Întrebări de început de task** (OBLIGATORIU): CUI solicitant, program/apel de finanțare, an de referință + curs BNR (ultima zi a anului), livrabilele dorite (default: toate 6), semnatarul Anexei 3 (nume + funcție), folder output.
+3. Scrape solicitant + recursie controlată pe asociați — AMBELE secțiuni termene.ro: „Asociați/acționari" ȘI „Persoane autorizate" (administratorii pot lega firme fără participație).
 4. Decision engine pe arborele legăturilor.
 5. AskUserQuestion pentru cazuri ambigue (rude, piață învecinată, investitori excepție, deținere publică).
-6. Completare automată: Excel (Sheet 2 + Sheet 4), Anexa 3 (bifa corectă), Anexa 4 (Secțiunea A + B + fișe duplicate).
-7. Sinteză 1–3 pagini cu verdict "Există legături: DA/NU/NECLAR".
-8. Audit log per analiză.
+6. Completare automată: Excel (Sheet 2 + Sheet 4), Anexa 3 (bifa corectă; etichetele „Numele"/„Funcția" se păstrează, semnatarul se scrie lângă ele), Anexa 4 (Secțiunea A + B + fișe duplicate).
+7. **Workbook Analiza încadrare IMM** (livrabil obligatoriu): harta grupului + verdict + financiare consolidate per an în lei/euro/mii lei/mii euro + categoria IMM + **Recomandare Claude**.
+8. Sinteză 1–3 pagini cu verdict "Există legături: DA/NU/NECLAR".
+9. Audit log per analiză.
 
 ## Output
 
@@ -43,6 +44,7 @@ Toate fișierele apar în `<output>/analize-imm/<data>_<CUI>/`:
 - `03_Declaratie_IMM_<CUI>_completata.xlsx`
 - `04_Anexa-3-completata.docx`
 - `05_Anexa-4-completata.docx`
+- `06_Analiza_incadrare_IMM_<denumire>.xlsx` — analiza completă + Recomandare Claude (OBLIGATORIU)
 - `audit.log`
 
 ## Instrucțiune pentru Claude

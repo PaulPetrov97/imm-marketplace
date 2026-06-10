@@ -2,15 +2,18 @@
 
 Pași:
 1. shutil.copy(template, out) — copie nouă.
-2. Înlocuiește placeholder-urile cu underscore în paragrafele de identificare.
+2. Înlocuiește placeholder-urile (underscore / puncte / …) păstrând ÎNTOTDEAUNA
+   eticheta — ex. cuvântul "Numele" NU se șterge, valoarea se scrie LÂNGĂ el.
 3. Bifează EXACT una din 3 căsuțe (autonomă / parteneră / legată) prin
    înlocuirea Wingdings unchecked (U+F0A8 sau U+F0F8) cu CHECKED (U+F0FE).
 4. Completează tabelul financiar (Tabel 2).
-5. Adaugă data semnării.
+5. Completează blocul de semnătură: Numele = persoana care întocmește anexa
+   (semnatarul — se întreabă la începutul task-ului), Funcția, Data semnării.
 """
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 from datetime import date
@@ -38,14 +41,24 @@ TIP_TO_ROW_INDEX = {
 }
 
 
-def _replace_underscore_placeholder(paragraph, label: str, value: str) -> bool:
-    """Înlocuiește runul cu '___' dintr-un paragraf care începe cu `label`."""
+# Placeholder = secvență de ≥3 caractere de tip underscore / punct / elipsă (…)
+_PLACEHOLDER_RE = re.compile(r"[_\.…]{3,}")
+
+
+def _fill_labeled(paragraph, label: str, value: str) -> bool:
+    """Completează un paragraf-etichetă fără a șterge eticheta.
+
+    Caută în paragraful care începe cu `label` primul run care conține o
+    secvență placeholder (___ / ..... / ……) și înlocuiește DOAR acea secvență
+    cu valoarea — textul etichetei rămâne intact chiar dacă etichetă +
+    placeholder stau în același run (ex. "Numele......").
+    """
     if not paragraph.text.startswith(label):
         return False
     for run in paragraph.runs:
-        if "___" in run.text:
-            # Păstrează un spațiu între etichetă și valoare
-            run.text = " " + value
+        m = _PLACEHOLDER_RE.search(run.text)
+        if m:
+            run.text = run.text[:m.start()] + " " + value
             return True
     return False
 
@@ -76,6 +89,8 @@ def fill_anexa3(
     totals_prev: dict | None,
     tip: str,
     modif_categorie: bool = False,
+    semnatar_nume: str | None = None,
+    semnatar_functie: str | None = None,
 ) -> Path:
     """
     solicitant: {denumire, adresa, cui, reprezentant_nume, reprezentant_functie}
@@ -83,6 +98,10 @@ def fill_anexa3(
     totals_prev: idem, pentru exercițiul anterior (opțional)
     tip: "AUTONOMA" | "PARTENERA" | "LEGATA"
     modif_categorie: True dacă datele financiare au modificat categoria față de N-1
+    semnatar_nume / semnatar_functie: persoana care întocmește/semnează anexa
+        (blocul "Numele... / Funcția:..." de la final). Dacă lipsesc, se
+        folosește reprezentantul legal. Eticheta "Numele" NU se șterge —
+        valoarea se scrie lângă ea.
     """
     if tip not in TIP_TO_ROW_INDEX:
         raise ValueError(f"Tip invalid: {tip}. Trebuie AUTONOMA/PARTENERA/LEGATA")
@@ -101,7 +120,7 @@ def fill_anexa3(
     }
     for p in doc.paragraphs:
         for label, value in placeholders.items():
-            if _replace_underscore_placeholder(p, label, value):
+            if _fill_labeled(p, label, value):
                 break
 
     # ---- 2. Tabel 0: bifa pe rândul corect ----
@@ -149,18 +168,25 @@ def fill_anexa3(
             mark = "X DA" if modif_categorie else "X NU"
             t2.rows[0].cells[1].paragraphs[0].add_run(f"\n[{mark}]").bold = True
 
-    # ---- 5. Data semnării ----
+    # ---- 5. Bloc semnătură: Numele / Funcția / Data semnării ----
+    # Eticheta rămâne MEREU; valoarea se scrie lângă ea.
+    semn_nume = semnatar_nume or solicitant.get("reprezentant_nume", "")
+    semn_functie = semnatar_functie or solicitant.get("reprezentant_functie", "")
     today_str = date.today().strftime("%d.%m.%Y")
     for p in doc.paragraphs:
-        if "Data semnării" in p.text:
-            for run in p.runs:
-                if "……" in run.text or "..." in run.text:
-                    if "……" in run.text:
-                        run.text = run.text.replace("……", " " + today_str, 1)
-                    else:
-                        run.text = run.text.replace("...", " " + today_str, 1)
-                    break
-            break
+        txt = p.text
+        if txt.startswith("Numele") and not txt.startswith("Numele și funcția"):
+            _fill_labeled(p, "Numele", semn_nume)
+        elif txt.startswith("Funcția") or txt.startswith("Functia"):
+            _fill_labeled(p, "Funcția" if txt.startswith("Funcția") else "Functia",
+                          semn_functie)
+        elif "Data semnării" in txt:
+            if not _fill_labeled(p, "Data semnării", today_str):
+                for run in p.runs:
+                    if "……" in run.text or "..." in run.text:
+                        run.text = re.sub(r"[…\.]{2,}", " " + today_str, run.text,
+                                          count=1)
+                        break
 
     doc.save(out_path)
     return out_path
@@ -205,8 +231,25 @@ def _smoke():
         "active_totale_mii_lei": 700.000,
     }
     result = fill_anexa3(tpl, out, solicitant, totals_ref, totals_prev, tip="PARTENERA",
-                        modif_categorie=False)
+                        modif_categorie=False,
+                        semnatar_nume="IONESCU MARIA",
+                        semnatar_functie="Consultant fonduri europene")
     print(f"Smoke OK: {result}")
+
+    # Verificare: eticheta "Numele" pastrata + semnatarul scris langa ea
+    chk = Document(result)
+    ok_nume = ok_func = False
+    for p in chk.paragraphs:
+        t = p.text
+        if t.startswith("Numele") and "și funcția" not in t and "IONESCU MARIA" in t:
+            ok_nume = True
+            print(f"  [OK] semnatura nume: {t!r}")
+        if (t.startswith("Funcția") or t.startswith("Functia")) and "Consultant" in t:
+            ok_func = True
+            print(f"  [OK] semnatura functie: {t!r}")
+    assert ok_nume, "Eticheta 'Numele' + semnatar NU au fost completate corect!"
+    assert ok_func, "Eticheta 'Funcția' + functie semnatar NU au fost completate corect!"
+    print("  Etichetele pastrate, semnatarul completat langa ele — OK")
 
 
 if __name__ == "__main__":

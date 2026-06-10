@@ -20,6 +20,16 @@ Pentru a determina dacă utilizatorul are cont premium/PartnerSCAN, după login:
    - **Premium**: `.shareholders-detail`, `.actionari-detaliu`, `.partneri-list`, sau secțiune `<div data-section="shareholders">` cu tabel complet.
    - **Public**: doar listă nume asociați, fără %, fără cross-reference.
 
+## Secțiuni OBLIGATORII de extras (toate patru, la FIECARE firmă)
+
+1. **„Asociați/acționari"** — cine deține firma (PF + PJ, cu %).
+2. **„Persoane autorizate"** — administratori, lichidatori, cenzori. NU sări peste ea:
+   un administrator fără participație poate lega firme (ex. administrator comun care
+   deține 100% o altă firmă-acționar — caz real: POPA FLAVIUS la FRESCOVERDE/ASTRALIS).
+3. **„Asociați/acționari și persoane autorizate — conexiuni cu alte firme"** — tabelul
+   cheie pentru recursie: ce alte firme dețin/administrează aceleași persoane (cu %).
+4. **„Lista firmelor în care <firma> este acționar"** — deținerile downstream ale firmei.
+
 ## Secțiuni de extras din pagina firmă
 
 ### Identificare firmă

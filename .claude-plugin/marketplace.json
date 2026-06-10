@@ -10,7 +10,7 @@
       "name": "imm-analiza-ro",
       "source": "./plugins/imm-analiza-ro",
       "description": "Analiză preliminară IMM (autonomă/parteneră/legată) conform Legii 346/2004 și Recomandării CE 2003/361/EC — scrape termene.ro prin Chrome MCP, completare automată Declaratie IMM + Anexa 3 + Anexa 4 + workbook Analiza încadrare IMM (harta grupului + financiare consolidate lei/euro), sinteză 1-3 pagini cu verdict.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "consulting",
       "keywords": ["imm", "sme", "romania", "termene.ro", "legea-346", "fonduri-europene", "anexa-3", "anexa-4"]
     }

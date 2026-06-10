@@ -1,27 +1,39 @@
-"""Generator pentru workbook-ul 'Analiza incadrare IMM' (format Hexol Lube).
+"""Generator pentru workbook-ul 'Analiza incadrare IMM' (format RBC contractare).
 
-Produce un raport complet de analiza IMM intr-un singur sheet, cu:
+LIVRABIL OBLIGATORIU la fiecare analiza. Produce un raport complet intr-un
+singur sheet, cu:
   1. Harta grupului  — per firma: denumire+CUI, asociati, cota, administrator,
-     relatii comerciale (DA/NU), adresa, CAEN principal, CAEN preponderent
-  2. Verdict legaturi — LEGATA/PARTENERA/AUTONOMA + lista firmelor
-  3. Tabele financiare per an — angajati, CA (lei), Active totale (lei),
-     CA (euro)=lei/curs, Active totale (euro)=lei/curs, TOTAL pe coloane
+     relatii comerciale (DA/NU), adresa, CAEN principal, CAEN preponderent.
+     Sursa: termene.ro — AMBELE sectiuni: "Asociati/actionari" SI
+     "Persoane autorizate" (administratorii pot lega firme fara participatie).
+  2. Verdict legaturi — LEGATA/PARTENERA/AUTONOMA/NECLAR + lista firmelor
+  3. Tabele financiare per an — angajati, CA si Active totale in LEI, EURO,
+     MII LEI si MII EURO (coloanele derivate raman formule live)
   4. Categoria finala IMM (micro/mica/mijlocie/nu_imm)
+  5. Recomandare Claude — concluzia consultantului AI: ce s-a constatat,
+     ce ramane de clarificat, ce varianta de declarare se recomanda.
 
-Spre deosebire de Declaratie_IMM_v1.0.xlsx (template fix cu max 8 parteneri),
-acesta se construieste de la zero (openpyxl) si scaleaza la orice numar de firme
-si ani. Coloanele euro raman formule live (=lei/curs).
+REGULI DE FORMAT (cerinte RBC):
+  * Cursul EUR/RON = cursul BNR din ULTIMA ZI (lucratoare) a anului de
+    referinta (31 decembrie). Vezi reference/06-format-analiza-imm.md.
+  * Separatori romanesti: zecimale cu virgula, mii cu punct. In Excel,
+    codurile de format (#,##0.00) sunt redate conform setarilor regionale —
+    pe Windows cu locale Romania se afiseaza automat 1.234.567,89.
+  * Coloanele euro = formule live  =lei/curs ; mii = formule  /1000.
+  * TOTAL sumeaza DOAR intreprinderile luate in calcul (randurile [EXCLUS]
+    apar in tabel dar nu intra in TOTAL).
 
 API:
-    build_analiza_imm(out_path, solicitant, companies, verdict, years, categorie)
+    build_analiza_imm(out_path, solicitant, companies, verdict, years,
+                      categorie, recomandare="", program=None)
 """
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
 
 # -------------------- Stiluri --------------------
@@ -30,12 +42,24 @@ _HDR_FONT = Font(bold=True, color="FFFFFF", size=10)
 _SUBHDR_FILL = PatternFill("solid", fgColor="D6E4F0")
 _TOTAL_FILL = PatternFill("solid", fgColor="FCE4D6")
 _VERDICT_FILL = PatternFill("solid", fgColor="C6E0B4")
+_RECOM_FILL = PatternFill("solid", fgColor="FFF2CC")
 _BOLD = Font(bold=True, size=10)
 _NORMAL = Font(size=10)
 _thin = Side(style="thin", color="999999")
 _BORDER = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 _WRAP = Alignment(wrap_text=True, vertical="center", horizontal="left")
 _CENTER = Alignment(wrap_text=True, vertical="center", horizontal="center")
+
+# Format numeric: separatorii sunt redati conform locale-ului Windows/Excel
+# (pe sisteme RO: mii cu '.', zecimale cu ',').
+_FMT_LEI = "#,##0.00"
+_FMT_MII = "#,##0.000"
+
+
+def fmt_ro(value: float, decimals: int = 2) -> str:
+    """Numar in conventia romaneasca: 1.234.567,89 (pentru texte, nu Excel)."""
+    s = f"{value:,.{decimals}f}"
+    return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
 
 def _style_row(ws, row, c0, c1, *, fill=None, font=None, align=None, border=True):
@@ -58,26 +82,32 @@ def build_analiza_imm(
     verdict: dict,
     years: list[dict],
     categorie: str,
+    recomandare: str = "",
+    program: str | None = None,
 ) -> Path:
     """
     solicitant: {denumire, cui}
     companies:  list de blocuri, fiecare:
         {denumire, cui, asociati: [{nume, cota}], administrator,
          relatii: "DA"/"NU", adresa, caen_principal, caen_preponderent}
+        -> include si administratorii/persoanele autorizate relevante!
     verdict:    {tip: "LEGATA"/"PARTENERA"/"AUTONOMA"/"NECLAR", cu: "text firme",
                  nota: "text optional"}
     years:      list de {an, curs, rows: [{denumire, angajati, ca_lei, active_lei,
                  exclus: bool, nota: str}]}
+                curs = cursul BNR din ULTIMA ZI a anului respectiv (31 dec)!
     categorie:  "MICROINTREPRINDERE"/"MICA"/"MIJLOCIE"/"NU ESTE IMM"
+    recomandare: textul "Recomandare Claude" (concluzie + pasi urmatori)
+    program:    programul / apelul de finantare (optional, apare in antet)
     """
     wb = Workbook()
     ws = wb.active
     title = solicitant["denumire"][:31]
     ws.title = "".join(ch for ch in title if ch not in r'\/?*[]:')[:31] or "Analiza IMM"
 
-    # Latimi coloane
-    widths = {"A": 2, "B": 34, "C": 30, "D": 16, "E": 26, "F": 18, "G": 40,
-              "H": 2, "I": 12, "J": 12}
+    # Latimi coloane (B..G harta grupului; B..K tabele financiare; M..N curs/note)
+    widths = {"A": 2, "B": 34, "C": 28, "D": 16, "E": 24, "F": 17, "G": 36,
+              "H": 14, "I": 16, "J": 14, "K": 16, "L": 2, "M": 28, "N": 10}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
@@ -89,13 +119,20 @@ def build_analiza_imm(
     r += 1
     ws.cell(row=r, column=2,
             value=f"Solicitant: {solicitant['denumire']} (CUI {solicitant['cui']})").font = _BOLD
+    r += 1
+    if program:
+        ws.cell(row=r, column=2, value=f"Program / apel de finantare: {program}").font = _NORMAL
+        r += 1
+    ws.cell(row=r, column=2,
+            value=f"Data analizei: {date.today().strftime('%d.%m.%Y')} · "
+                  f"Surse: termene.ro (Asociati/actionari + Persoane autorizate) + ONRC/ANAF"
+            ).font = Font(italic=True, size=9)
     r += 2
 
     # -------------------- 1. Harta grupului --------------------
     ws.cell(row=r, column=2, value="1. STRUCTURA GRUPULUI").font = Font(bold=True, size=11, color="1F4E79")
     r += 1
     for comp in companies:
-        # Header
         for i, h in enumerate(NET_HDRS):
             ws.cell(row=r, column=2 + i, value=h)
         _style_row(ws, r, 2, 7, fill=_SUBHDR_FILL, font=_BOLD, align=_CENTER)
@@ -114,17 +151,14 @@ def build_analiza_imm(
             ws.cell(row=r, column=7, value=comp.get("adresa", "") if j == 0 else "")
             _style_row(ws, r, 2, 7, font=_NORMAL, align=_WRAP)
             r += 1
-        # Merge company name / admin / relatii / adresa pe randurile asociatilor
         if len(asociati) > 1:
             for col in (2, 5, 6, 7):
                 ws.merge_cells(start_row=first, start_column=col, end_row=r - 1, end_column=col)
-        # CAEN principal
         ws.cell(row=r, column=2, value="CAEN principal")
         ws.cell(row=r, column=3, value=comp.get("caen_principal", ""))
         ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=7)
         _style_row(ws, r, 2, 7, font=_NORMAL, align=_WRAP)
         r += 1
-        # CAEN preponderent
         ws.cell(row=r, column=2, value="CAEN preponderent")
         ws.cell(row=r, column=3, value=comp.get("caen_preponderent", ""))
         ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=7)
@@ -136,14 +170,15 @@ def build_analiza_imm(
     r += 1
     ws.cell(row=r, column=2, value=verdict.get("tip", ""))
     ws.cell(row=r, column=3, value=verdict.get("cu", ""))
-    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=7)
-    _style_row(ws, r, 2, 7, fill=_VERDICT_FILL, font=_BOLD, align=_WRAP)
+    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=11)
+    _style_row(ws, r, 2, 11, fill=_VERDICT_FILL, font=_BOLD, align=_WRAP)
     r += 1
     if verdict.get("nota"):
         ws.cell(row=r, column=2, value="Nota")
         ws.cell(row=r, column=3, value=verdict["nota"])
-        ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=7)
-        _style_row(ws, r, 2, 7, font=Font(italic=True, size=9), align=_WRAP)
+        ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=11)
+        _style_row(ws, r, 2, 11, font=Font(italic=True, size=9), align=_WRAP)
+        ws.row_dimensions[r].height = max(28, 13 * (len(verdict["nota"]) // 130 + 1))
         r += 1
     r += 1
 
@@ -151,53 +186,57 @@ def build_analiza_imm(
     ws.cell(row=r, column=2, value="3. DATE FINANCIARE CONSOLIDATE (per an)").font = Font(bold=True, size=11, color="1F4E79")
     r += 1
     FIN_HDRS = ["Denumire societate", "Nr. angajati", "CA (lei)",
-                "Active totale (lei)", "CA (euro)", "Active totale (euro)"]
+                "Active totale (lei)", "CA (euro)", "Active totale (euro)",
+                "CA (mii lei)", "Active totale (mii lei)",
+                "CA (mii euro)", "Active totale (mii euro)"]
     for yd in years:
         an = yd["an"]
         curs = yd["curs"]
-        # Antet an + curs
         ws.cell(row=r, column=2, value=f"Exercitiul financiar {an}").font = _BOLD
-        ws.cell(row=r, column=9, value="curs euro").font = _NORMAL
-        jcell = ws.cell(row=r, column=10, value=curs)
+        ws.cell(row=r, column=13, value=f"curs euro BNR 31.12.{an}").font = _NORMAL
+        jcell = ws.cell(row=r, column=14, value=curs)
         jcell.number_format = "0.0000"
-        curs_ref = f"$J${r}"
+        curs_ref = f"$N${r}"
         r += 1
-        # Header tabel
         for i, h in enumerate(FIN_HDRS):
             ws.cell(row=r, column=2 + i, value=h)
-        _style_row(ws, r, 2, 7, fill=_SUBHDR_FILL, font=_BOLD, align=_CENTER)
+        _style_row(ws, r, 2, 11, fill=_SUBHDR_FILL, font=_BOLD, align=_CENTER)
         r += 1
         data_first = r
         for row in yd["rows"]:
             ws.cell(row=r, column=2, value=row["denumire"] + (" [EXCLUS]" if row.get("exclus") else ""))
-            ang = row.get("angajati", "-")
-            ws.cell(row=r, column=3, value=ang)
+            ws.cell(row=r, column=3, value=row.get("angajati", "-"))
             cl = ws.cell(row=r, column=4, value=row.get("ca_lei", 0))
-            cl.number_format = "#,##0.00"
+            cl.number_format = _FMT_LEI
             al = ws.cell(row=r, column=5, value=row.get("active_lei", 0))
-            al.number_format = "#,##0.00"
+            al.number_format = _FMT_LEI
             fe = ws.cell(row=r, column=6, value=f"=D{r}/{curs_ref}")
-            fe.number_format = "#,##0.00"
+            fe.number_format = _FMT_LEI
             ge = ws.cell(row=r, column=7, value=f"=E{r}/{curs_ref}")
-            ge.number_format = "#,##0.00"
-            _style_row(ws, r, 2, 7, font=_NORMAL, align=_WRAP)
+            ge.number_format = _FMT_LEI
+            hm = ws.cell(row=r, column=8, value=f"=D{r}/1000")
+            hm.number_format = _FMT_MII
+            im = ws.cell(row=r, column=9, value=f"=E{r}/1000")
+            im.number_format = _FMT_MII
+            jm = ws.cell(row=r, column=10, value=f"=F{r}/1000")
+            jm.number_format = _FMT_MII
+            km = ws.cell(row=r, column=11, value=f"=G{r}/1000")
+            km.number_format = _FMT_MII
+            _style_row(ws, r, 2, 11, font=_NORMAL, align=_WRAP)
             if row.get("nota"):
-                ws.cell(row=r, column=9, value=row["nota"]).font = Font(italic=True, size=8)
+                ws.cell(row=r, column=13, value=row["nota"]).font = Font(italic=True, size=8)
             r += 1
         data_last = r - 1
-        # TOTAL — sumeaza doar randurile neexcluse
         incl_rows = [data_first + i for i, row in enumerate(yd["rows"]) if not row.get("exclus")]
         ws.cell(row=r, column=2, value="TOTAL (intreprinderi luate in calcul)")
         if incl_rows:
-            c_terms = "+".join(f"C{rr}" for rr in incl_rows)
-            # angajati pot fi "-"; folosim SUM pe range si ignoram textul
             ws.cell(row=r, column=3, value=f"=SUM(C{data_first}:C{data_last})")
-            for col_letter in ("D", "E", "F", "G"):
-                terms = "+".join(f"{col_letter}{rr}" for rr in incl_rows)
-                cc = ws.cell(row=r, column={"D": 4, "E": 5, "F": 6, "G": 7}[col_letter],
-                             value=f"={terms}")
-                cc.number_format = "#,##0.00"
-        _style_row(ws, r, 2, 7, fill=_TOTAL_FILL, font=_BOLD, align=_CENTER)
+            col_map = {"D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "I": 9, "J": 10, "K": 11}
+            for letter, idx in col_map.items():
+                terms = "+".join(f"{letter}{rr}" for rr in incl_rows)
+                cc = ws.cell(row=r, column=idx, value=f"={terms}")
+                cc.number_format = _FMT_MII if idx >= 8 else _FMT_LEI
+        _style_row(ws, r, 2, 11, fill=_TOTAL_FILL, font=_BOLD, align=_CENTER)
         r += 2
 
     # -------------------- 4. Categoria finala --------------------
@@ -206,8 +245,23 @@ def build_analiza_imm(
     ws.cell(row=r, column=2, value="Incadrare finala:")
     cell_cat = ws.cell(row=r, column=3, value=categorie)
     cell_cat.font = Font(bold=True, size=12, color="C00000")
-    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=5)
-    _style_row(ws, r, 2, 5, font=_BOLD, align=_CENTER)
+    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=6)
+    _style_row(ws, r, 2, 6, font=_BOLD, align=_CENTER)
+    r += 2
+
+    # -------------------- 5. Recomandare Claude --------------------
+    ws.cell(row=r, column=2, value="5. RECOMANDARE CLAUDE").font = Font(bold=True, size=11, color="1F4E79")
+    r += 1
+    rec = recomandare or "(fara recomandare)"
+    ws.cell(row=r, column=2, value=rec)
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=11)
+    _style_row(ws, r, 2, 11, fill=_RECOM_FILL, font=_NORMAL, align=_WRAP)
+    ws.row_dimensions[r].height = max(45, 13 * (rec.count("\n") + len(rec) // 150 + 1))
+    r += 1
+    ws.cell(row=r, column=2,
+            value=f"Generat automat de pluginul imm-analiza-ro · {date.today().strftime('%d.%m.%Y')} · "
+                  f"A se valida cu declaratiile pe propria raspundere ale solicitantului."
+            ).font = Font(italic=True, size=8, color="808080")
 
     ws.sheet_view.showGridLines = False
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,7 +281,11 @@ if __name__ == "__main__":
           "adresa": "Bucuresti", "caen_principal": "6201", "caen_preponderent": "6201"}],
         {"tip": "AUTONOMA", "cu": "-", "nota": "demo"},
         [{"an": 2024, "curs": 4.9741,
-          "rows": [{"denumire": "DEMO SRL", "angajati": 5, "ca_lei": 1000000, "active_lei": 500000}]}],
+          "rows": [{"denumire": "DEMO SRL", "angajati": 5, "ca_lei": 1234567.89, "active_lei": 500000}]}],
         "MICROINTREPRINDERE",
+        recomandare="Demo: firma autonoma, micro. Se recomanda declararea ca autonoma; "
+                    "nu exista cazuri NECLAR.",
+        program="Demo apel 2026",
     )
     print(f"OK: {out}")
+    print(f"fmt_ro test: {fmt_ro(1234567.891, 2)} (asteptat 1.234.567,89)")

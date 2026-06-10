@@ -20,6 +20,19 @@ except ImportError:
     sys.exit(2)
 
 
+# -------------------- Format numeric românesc --------------------
+
+def fmt_ro(value: float, decimals: int = 2) -> str:
+    """Număr în convenția românească: zecimale cu virgulă, mii cu punct.
+
+    Ex: fmt_ro(1234567.891) -> '1.234.567,89'. Se folosește în TOATE
+    output-urile text (MD, DOCX); în Excel separatorii vin din number_format
+    + locale-ul sistemului.
+    """
+    s = f"{value:,.{decimals}f}"
+    return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
 # -------------------- MD generator --------------------
 
 def _md_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -76,10 +89,10 @@ def generate_md(
                 ["Stare", solicitant.get("stare", "—")],
                 ["Salariați (an N)", f"{solicitant.get('salariati', '—')}"],
                 ["Cifră afaceri (an N)",
-                 f"{solicitant.get('cifra_afaceri_lei', 0):,.2f} lei"
+                 f"{fmt_ro(solicitant.get('cifra_afaceri_lei', 0))} lei"
                  if solicitant.get('cifra_afaceri_lei') else "—"],
                 ["Active totale (an N)",
-                 f"{solicitant.get('active_totale_lei', 0):,.2f} lei"
+                 f"{fmt_ro(solicitant.get('active_totale_lei', 0))} lei"
                  if solicitant.get('active_totale_lei') else "—"],
             ]
         ),
@@ -216,13 +229,13 @@ def _build_classification_rows(
     tot_ca_eur = agregat.get("cifra_afaceri_eur", 0)
     tot_act_eur = agregat.get("active_totale_eur", 0)
     return [
-        ["Salariați", f"{sol_sal:.0f}", f"{p_sal:.2f}", f"{l_sal:.0f}",
-         f"{tot_sal:.2f}", "<250", "✓" if tot_sal < 250 else "✗"],
-        ["Cifră afaceri (lei)", f"{sol_ca:,.0f}", f"{p_ca:,.0f}", f"{l_ca:,.0f}",
-         f"{tot_ca:,.0f}", "≤€50M",
+        ["Salariați", fmt_ro(sol_sal, 0), fmt_ro(p_sal, 2), fmt_ro(l_sal, 0),
+         fmt_ro(tot_sal, 2), "<250", "✓" if tot_sal < 250 else "✗"],
+        ["Cifră afaceri (lei)", fmt_ro(sol_ca, 0), fmt_ro(p_ca, 0), fmt_ro(l_ca, 0),
+         fmt_ro(tot_ca, 0), "≤€50M",
          "✓" if tot_ca_eur <= 50_000_000 else "✗"],
-        ["Active totale (lei)", f"{sol_act:,.0f}", f"{p_act:,.0f}", f"{l_act:,.0f}",
-         f"{tot_act:,.0f}", "≤€43M",
+        ["Active totale (lei)", fmt_ro(sol_act, 0), fmt_ro(p_act, 0), fmt_ro(l_act, 0),
+         fmt_ro(tot_act, 0), "≤€43M",
          "✓" if tot_act_eur <= 43_000_000 else "✗"],
     ]
 
