@@ -4,8 +4,9 @@ Pași:
 1. shutil.copy(template, out) — copie nouă.
 2. Înlocuiește placeholder-urile (underscore / puncte / …) păstrând ÎNTOTDEAUNA
    eticheta — ex. cuvântul "Numele" NU se șterge, valoarea se scrie LÂNGĂ el.
-3. Bifează EXACT una din 3 căsuțe (autonomă / parteneră / legată) prin
-   înlocuirea Wingdings unchecked (U+F0A8 sau U+F0F8) cu CHECKED (U+F0FE).
+3. Bifează una SAU MAI MULTE căsuțe (autonomă / parteneră / legată) — o firmă
+   poate fi simultan parteneră ȘI legată — prin înlocuirea Wingdings unchecked
+   cu CHECKED (U+F0FE), forțând fontul Wingdings pe runul bifei.
 4. Completează tabelul financiar (Tabel 2).
 5. Completează blocul de semnătură: Numele = persoana care întocmește anexa
    (semnatarul — se întreabă la începutul task-ului), Funcția, Data semnării.
@@ -63,20 +64,20 @@ def _fill_labeled(paragraph, label: str, value: str) -> bool:
     return False
 
 
-def _tick_checkbox(cell, tip: str) -> bool:
-    """Bifează căsuța dintr-o celulă — păstrează font Wingdings.
+def _tick_checkbox(cell) -> bool:
+    """Bifează căsuța dintr-o celulă, forțând randarea Wingdings.
 
-    Strategie: găsește runul care conține caracterul UNCHECKED și înlocuiește
-    cu CHECKED_WINGDINGS dacă fontul e Wingdings, altfel cu CHECKED_UNICODE.
+    Template-ul ține caracterul de checkbox într-un run de text FĂRĂ font setat
+    (run.font.name = None), deci varianta veche scria ☑ (U+2611) în Times — bifa
+    ieșea inconsistentă cu căsuțele goale. Aici înlocuim cu CHECKED_WINGDINGS
+    (U+F0FE) ȘI setăm fontul runului pe Wingdings ca să randeze corect.
     """
     for para in cell.paragraphs:
         for run in para.runs:
             for unchecked in UNCHECKED_CANDIDATES:
-                if unchecked in run.text:
-                    font_name = (run.font.name or "").lower()
-                    is_wingdings = "wing" in font_name
-                    replacement = CHECKED_WINGDINGS if is_wingdings else CHECKED_UNICODE
-                    run.text = run.text.replace(unchecked, replacement, 1)
+                if unchecked and unchecked in run.text:
+                    run.text = run.text.replace(unchecked, CHECKED_WINGDINGS, 1)
+                    run.font.name = "Wingdings"
                     return True
     return False
 
@@ -87,7 +88,7 @@ def fill_anexa3(
     solicitant: dict,
     totals_ref: dict,
     totals_prev: dict | None,
-    tip: str,
+    tip,  # str SAU listă/set: "LEGATA", sau {"PARTENERA","LEGATA"} când e și parteneră și legată
     modif_categorie: bool = False,
     semnatar_nume: str | None = None,
     semnatar_functie: str | None = None,
@@ -103,8 +104,12 @@ def fill_anexa3(
         folosește reprezentantul legal. Eticheta "Numele" NU se șterge —
         valoarea se scrie lângă ea.
     """
-    if tip not in TIP_TO_ROW_INDEX:
-        raise ValueError(f"Tip invalid: {tip}. Trebuie AUTONOMA/PARTENERA/LEGATA")
+    tips = [tip] if isinstance(tip, str) else list(tip)
+    target_idx = set()
+    for _t in tips:
+        if _t not in TIP_TO_ROW_INDEX:
+            raise ValueError(f"Tip invalid: {_t}. Trebuie AUTONOMA/PARTENERA/LEGATA")
+        target_idx.add(TIP_TO_ROW_INDEX[_t])
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(template_path, out_path)
@@ -120,22 +125,22 @@ def fill_anexa3(
     }
     for p in doc.paragraphs:
         for label, value in placeholders.items():
-            if _fill_labeled(p, label, value):
+            # sare peste valorile goale (ex. reprezentant neconfirmat) — placeholder-ul rămâne
+            if value and value.strip(" ,") and _fill_labeled(p, label, value):
                 break
 
     # ---- 2. Tabel 0: bifa pe rândul corect ----
     if len(doc.tables) < 1:
         raise RuntimeError("Anexa 3 — tabelul de tip întreprindere lipsește")
     t0 = doc.tables[0]
-    target_idx = TIP_TO_ROW_INDEX[tip]
     if len(t0.rows) < 3:
         raise RuntimeError(f"Anexa 3 — tabel tip are {len(t0.rows)} rânduri, aștept 3")
     for ri in range(3):
         cell = t0.rows[ri].cells[0]
-        if ri == target_idx:
-            ok = _tick_checkbox(cell, tip)
+        if ri in target_idx:
+            ok = _tick_checkbox(cell)
             if not ok:
-                # Fallback: scrie un X în prima celulă (vizibil chiar dacă font-ul nu randează)
+                # Fallback: scrie un X (vizibil chiar dacă font-ul nu randează)
                 cell.paragraphs[0].add_run(" X").bold = True
 
     # ---- 3. Tabel 1: date financiare ----
@@ -154,11 +159,9 @@ def fill_anexa3(
     _set_cell(t1.rows[2].cells[1], f"{totals_ref.get('cifra_afaceri_mii_lei', 0):.3f}")
     _set_cell(t1.rows[2].cells[2], f"{totals_ref.get('active_totale_mii_lei', 0):.3f}")
 
-    # Row 3 = exercițiul anterior (dacă există)
-    if totals_prev and len(t1.rows) >= 4:
-        _set_cell(t1.rows[3].cells[0], f"{totals_prev.get('salariati', 0):g}")
-        _set_cell(t1.rows[3].cells[1], f"{totals_prev.get('cifra_afaceri_mii_lei', 0):.3f}")
-        _set_cell(t1.rows[3].cells[2], f"{totals_prev.get('active_totale_mii_lei', 0):.3f}")
+    # Tabel III are UN SINGUR rând de date (R2 = anul de referință). Rândul R3
+    # rămâne GOL — datele exercițiului anterior NU se trec aici (feedback Paul).
+    _ = totals_prev  # păstrat în semnătură pentru compatibilitate, dar neutilizat aici
 
     # ---- 4. Tabel 2: modificare categorie (Da/Nu) ----
     if len(doc.tables) >= 3:
@@ -170,16 +173,21 @@ def fill_anexa3(
 
     # ---- 5. Bloc semnătură: Numele / Funcția / Data semnării ----
     # Eticheta rămâne MEREU; valoarea se scrie lângă ea.
-    semn_nume = semnatar_nume or solicitant.get("reprezentant_nume", "")
-    semn_functie = semnatar_functie or solicitant.get("reprezentant_functie", "")
+    # Semnatarul se completează DOAR dacă e confirmat. Dacă lipsește, eticheta
+    # „Numele"/„Funcția" rămâne cu placeholder-ul punctat pentru completare manuală
+    # (firma poate avea mai mulți administratori — semnatarul îl alege clientul).
+    semn_nume = (semnatar_nume or "").strip()
+    semn_functie = (semnatar_functie or "").strip()
     today_str = date.today().strftime("%d.%m.%Y")
     for p in doc.paragraphs:
         txt = p.text
         if txt.startswith("Numele") and not txt.startswith("Numele și funcția"):
-            _fill_labeled(p, "Numele", semn_nume)
+            if semn_nume:
+                _fill_labeled(p, "Numele", semn_nume)
         elif txt.startswith("Funcția") or txt.startswith("Functia"):
-            _fill_labeled(p, "Funcția" if txt.startswith("Funcția") else "Functia",
-                          semn_functie)
+            if semn_functie:
+                _fill_labeled(p, "Funcția" if txt.startswith("Funcția") else "Functia",
+                              semn_functie)
         elif "Data semnării" in txt:
             if not _fill_labeled(p, "Data semnării", today_str):
                 for run in p.runs:

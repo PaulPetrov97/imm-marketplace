@@ -29,6 +29,10 @@ def fill_excel(
     solicitant_cui: str,
     cwd: Path | None = None,
     date_override: date | None = None,
+    an_referinta: int | None = None,
+    curs: float | None = None,
+    solicitant_denumire: str | None = None,
+    recalc: bool = True,
 ) -> Path:
     """Completează Excel-ul și returnează path-ul fișierului nou creat.
 
@@ -51,6 +55,20 @@ def fill_excel(
 
     shutil.copy(template, out_path)
     wb = load_workbook(out_path)
+
+    # ---------- Sheet Ipoteze: an de referință + curs EUR + denumire solicitant ----------
+    # Aceste 3 celule sunt DRIVERUL tuturor formulelor euro din sheet-urile de
+    # calcul (Calcul partenere & legate, Sect A, Tabel B2 — toate împart la
+    # Ipoteze!$C$4). Template-ul vine cu valori demo (2019 / 4,7793) care TREBUIE
+    # suprascrise, altfel euro iese greșit peste tot.
+    if "Ipoteze" in wb.sheetnames:
+        wi = wb["Ipoteze"]
+        if solicitant_denumire:
+            wi["C2"] = solicitant_denumire
+        if an_referinta is not None:
+            wi["C3"] = int(an_referinta)
+        if curs is not None:
+            wi["C4"] = float(curs)
 
     # ---------- Sheet 2: Date_partenere ----------
     ws = wb["Date_partenere"]
@@ -87,6 +105,16 @@ def fill_excel(
             cell_f.number_format = "#,##0.000"
 
     wb.save(out_path)
+
+    # Recalcul best-effort (Excel COM): formulele euro din Calcul/Sect A/Tabel B2
+    # primesc valori-cache vizibile în orice viewer. No-op dacă nu e Windows/Excel
+    # (fișierul se recalculează oricum la deschiderea în Excel — fullCalcOnLoad).
+    if recalc:
+        try:
+            from _recalc import recalc_xlsx
+            recalc_xlsx(out_path)
+        except Exception:
+            pass
     return out_path
 
 

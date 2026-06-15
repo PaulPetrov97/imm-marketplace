@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.0 — 2026-06-15
+
+Feedback din analiza ROMCARBON SA (întreprindere mare, parteneră + legată) — corecții pe toate cele 4 livrabile.
+
+### Reparat
+- **Declarație IMM (`fill_xlsx.py`)**: scrie acum `Ipoteze!C2/C3/C4` (denumire / an / curs EUR). Era cauza euro greșit în `Calcul partenere & legate`, `Sect A` și `Tabel B2` — formulele împart la `Ipoteze!$C$4`, blocat pe demo 2019/4,7793. Recalcul Excel best-effort la salvare (`_recalc.py`) → euro vizibil în orice viewer.
+- **Analiza încadrare IMM (`fill_analiza_imm.py`)**: coloanele euro/mii scrise ca **numere calculate**, nu formule openpyxl fără cache (apăreau goale în viewere ne-Excel).
+- **Anexa 3 (`fill_docx_anexa3.py`)**: bifează **mai multe** categorii (parteneră ȘI legată) când e cazul; bifa forțează fontul Wingdings; Tabel III — UN SINGUR rând (anul de referință); semnatarul rămâne GOL dacă nu e confirmat (nu se mai auto-alege un administrator).
+- **Anexa 4 (`fill_docx_anexa4.py`)** — rescriere: completează tabelul pag.1; duplică **FIȘA DE PARTENERIAT** (per parteneră) și **FIȘA privind legătura** (per legată); bifează Cazul corect; lasă „Identificarea prin consolidare" goală; denumiri în Tabelul B2; anul se propagă în antetele din celulele de tabel (înainte „2024" rămânea, fiindcă bucla parcurgea doar paragrafele top-level).
+
+### Adăugat
+- `scripts/_recalc.py` — recalcul best-effort Excel COM (Windows) pentru cache-ul formulelor.
+- Invariante SKILL.md noi: #13 (adresă completă + președinte per FIECARE firmă) și #14 (secțiuni obligatorii Anexa 4).
+
+### Notă
+- Adresa completă + președintele pentru parteneri/legate depind de scrape (termene.ro) — SKILL.md cere acum explicit extragerea lor pentru FIECARE firmă, nu doar pentru solicitant. La analiza ROMCARBON, termene.ro le-a întors doar pentru solicitant.
+
 ## v0.3.0 — 2026-06-10
 
 Feedback din utilizare reală (analizele TOPGYN + FRESCOVERDE) — 6 îmbunătățiri:

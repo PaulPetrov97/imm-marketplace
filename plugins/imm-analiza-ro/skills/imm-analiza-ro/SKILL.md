@@ -23,8 +23,8 @@ La activare, după ce ai primit lista de CUI-uri (slash command `/imm CUI1 CUI2 
 ## Invariante CRITICE — niciodată călcate
 
 1. **Template-urile din `templates/` sunt READ-ONLY.** Niciodată `wb.save()` peste ele. Întotdeauna `shutil.copy()` într-un fișier nou în folderul output.
-2. **Excel `Declaratie IMM`**: scrie EXCLUSIV pe `Date_partenere!C4:J11` (parteneri, max 8) și `Date_legate!C4:F13` (legate, max 10 — verifică structura la prima rulare). NU atinge `row 12` din Date_partenere (formule). NU atinge alte sheet-uri: `Ipoteze`, `Date_consolidate`, `Calcul partenere & legate`, `Sect A - Intr. partenere`, `Tabel B1 - consolidate`, `Tabel B2 - legate`. NU modifica `number_format` decât cu valoarea originală.
-3. **Anexa 3 (Word)**: bifează EXACT una din 3 căsuțe (autonomă/parteneră/legată) prin înlocuire run.text doar pe run-ul Wingdings țintă. NU creează run-uri noi în Tabel 1 (rupe inheritance-ul de font Wingdings → tofu box).
+2. **Excel `Declaratie IMM`**: scrie pe `Date_partenere!C4:J11` (parteneri, max 8), `Date_legate!C4:F13` (legate, max 10) ȘI **OBLIGATORIU pe `Ipoteze!C2/C3/C4`** (denumire solicitant / an de referință / curs EUR). `Ipoteze!C4` e DRIVERUL tuturor formulelor euro din `Calcul`/`Sect A`/`Tabel B2` (toate împart la `Ipoteze!$C$4`); template-ul vine cu demo 2019/4,7793 — dacă nu îl suprascrii, euro iese greșit peste tot (pasează `an_referinta`, `curs`, `solicitant_denumire` la `fill_excel`). NU atinge `row 12` din Date_partenere (formule), NU rescrie formulele din sheet-urile de calcul (se recalculează singure din Ipoteze + Date_*; după salvare `fill_xlsx` recalculează best-effort cu Excel COM — `_recalc.py`). NU modifica `number_format` decât cu valoarea originală.
+3. **Anexa 3 (Word)**: bifează căsuța/căsuțele corecte din 3 (autonomă/parteneră/legată) — o firmă poate fi simultan **parteneră ȘI legată** → bifează AMBELE (`tip={"PARTENERA","LEGATA"}`). Bifa forțează fontul Wingdings (U+F0FE) pe run-ul țintă. NU creează run-uri noi în Tabel 1. **Tabel III** (date financiare): completează UN SINGUR rând (anul de referință) — NU completa rândul exercițiului anterior (`totals_prev` nu se mai trece în grilă).
 4. **Anexa 4 (Word)**: duplică blocurile "Fișa de parteneriat" / "Fișa privind legătura" prin lxml deepcopy pe elemente `<w:p>` și `<w:tbl>` complete. Niciodată `paragraph.insert_paragraph_before` pentru tabele.
 5. **NU inventa date.** Dacă termene.ro lipsește un câmp, marchează `NECUNOSCUT` în JSON-ul de extragere și escaladează la utilizator prin AskUserQuestion sau flag `NECLAR` în sinteză.
 6. **NU ghici legăturile ambigue.** Cazurile de "acționare concertată" (rude), "piață învecinată" (CAEN diferite), "investitor excepție" (business angel / universitate / fond) → întotdeauna AskUserQuestion. Dacă utilizatorul nu știe → flag NECLAR explicit în output.
@@ -33,7 +33,9 @@ La activare, după ce ai primit lista de CUI-uri (slash command `/imm CUI1 CUI2 
 9. **Workbook-ul `06_Analiza_incadrare_IMM` este livrabil OBLIGATORIU** la fiecare analiză și include secțiunea **„Recomandare Claude"** (concluzie + ce rămâne de clarificat + varianta de declarare recomandată).
 10. **Curs valutar = cursul BNR din ULTIMA ZI a anului de referință** (31 decembrie). Niciodată curs mediu anual sau curs curent.
 11. **Format numeric românesc** în toate output-urile text: zecimale cu virgulă, mii cu punct (`1.234.567,89`) — folosește `fmt_ro()` din `sinteza.py`/`fill_analiza_imm.py`. În Excel: number_format standard (`#,##0.00`), separatorii vin din locale.
-12. **Anexa 3 — etichetele NU se șterg.** La „Numele" / „Funcția" din blocul de semnătură, valoarea se scrie LÂNGĂ etichetă (semnatarul = persoana care întocmește anexa, întrebată la pasul 1), nu în locul ei.
+12. **Anexa 3 — etichetele NU se șterg.** La „Numele" / „Funcția" din blocul de semnătură, valoarea se scrie LÂNGĂ etichetă. **Dacă semnatarul NU e confirmat** (ex. firmă cu mai mulți administratori) → lasă numele GOL (placeholder-ul punctat rămâne pentru completare manuală); NU auto-alege un administrator (`semnatar_nume=None`).
+13. **Adresă completă + președinte pentru FIECARE firmă.** Pentru solicitant ȘI pentru fiecare parteneră/legată, scrapează de pe termene.ro adresa sediului social COMPLETĂ (stradă, nr., localitate, județ, cod) și numele președintelui CA / directorului general / administratorului. Acestea intră în `Date_partenere` col D (adresă) + col F (președinte) — oglindite automat în `Sect A` —, în fișele Anexei 4 și în harta grupului din workbook-ul 06. NU lăsa „-" sau adresă la nivel de județ când termene.ro are datele; dacă lipsesc real → marchează NECUNOSCUT și escaladează.
+14. **Anexa 4 — secțiuni obligatorii.** Tabelul pag.1 (solicitant / partenere A / legate B / TOTAL) se completează; câte o **FIȘĂ DE PARTENERIAT** per parteneră și câte o **FIȘĂ privind legătura** per legată (se duplică automat); bifează **Cazul** corect din Secțiunea B (de regulă Cazul 2 pentru filiale individuale); „Identificarea întreprinderilor incluse prin consolidare" rămâne **GOALĂ** la Cazul 2; Tabelul B2 are denumirile firmelor. Anul de referință se propagă în toate antetele de tabel.
 
 ## Workflow — 10 pași
 
@@ -85,10 +87,10 @@ Doar pentru cazurile detectate ca ambigue:
 - **Deținere publică**: "Există ≥25% deținere directă/indirectă de un organism public în solicitant? (Dacă DA → NU este IMM)"
 
 ### 8. Completează documentele
-- `scripts/fill_xlsx.py` → `03_Declaratie_IMM_<CUI>_completata.xlsx`
+- `scripts/fill_xlsx.py` → `03_Declaratie_IMM_<CUI>_completata.xlsx` — pasează `an_referinta`, `curs` (BNR 31 dec) și `solicitant_denumire` (scriu `Ipoteze!C3/C4/C2`); fiecare partener cu adresa COMPLETĂ (col D) + numele președintelui (col F). Recalcul Excel best-effort la final.
 - `scripts/fill_docx_anexa3.py` → `04_Anexa-3-completata.docx` — pasează `semnatar_nume` + `semnatar_functie` (din întrebările de la pasul 1); etichetele „Numele"/„Funcția" rămân, valorile se scriu lângă ele.
-- `scripts/fill_docx_anexa4.py` → `05_Anexa-4-completata.docx`
-- `scripts/fill_analiza_imm.py` → `06_Analiza_incadrare_IMM_<denumire>.xlsx` — **workbook de analiză completă, livrabil OBLIGATORIU** (format RBC contractare): harta grupului (asociați + administratori/persoane autorizate, cote, relații comerciale DA/NU, CAEN principal+preponderent), verdict legături, tabele financiare consolidate per an (CA + active în **lei, euro, MII lei și MII euro** — coloanele derivate sunt formule live), categoria IMM finală și secțiunea **„Recomandare Claude"**. Cursul = BNR din ULTIMA ZI a anului (2022=4,9474; 2023=4,9746; 2024=4,9741; 2025=5,0985 — vezi `reference/06-format-analiza-imm.md`). Pasează `program=` (apelul de finanțare) și `recomandare=` (2-5 fraze: constatări + clarificări rămase + varianta de declarare recomandată). Acoperă număr variabil de firme și ani (se construiește de la zero, nu e template fix).
+- `scripts/fill_docx_anexa4.py` → `05_Anexa-4-completata.docx` — pasează `solicitant` (date proprii), `parteneri`, `legate`, `an_referinta`, `caz` (1/2): completează tabelul pag.1, fișele (una per firmă, duplicate automat prin deepcopy), bifează Cazul, lasă consolidarea (T5) goală.
+- `scripts/fill_analiza_imm.py` → `06_Analiza_incadrare_IMM_<denumire>.xlsx` — **workbook de analiză completă, livrabil OBLIGATORIU** (format RBC contractare): harta grupului (asociați + administratori/persoane autorizate, cote, relații comerciale DA/NU, CAEN principal+preponderent), verdict legături, tabele financiare consolidate per an (CA + active în **lei, euro, MII lei și MII euro** — euro/mii = numere calculate, vizibile în orice viewer), categoria IMM finală și secțiunea **„Recomandare Claude"**. Cursul = BNR din ULTIMA ZI a anului (2022=4,9474; 2023=4,9746; 2024=4,9741; 2025=5,0985 — vezi `reference/06-format-analiza-imm.md`). Pasează `program=` (apelul de finanțare) și `recomandare=` (2-5 fraze: constatări + clarificări rămase + varianta de declarare recomandată). Acoperă număr variabil de firme și ani (se construiește de la zero, nu e template fix).
 
 ### 9. Sinteza
 - `scripts/sinteza.py` → `02_Sinteza_<CUI>.md` (afișat inline) + `02_Sinteza_<CUI>.docx`
@@ -111,7 +113,7 @@ Doar pentru cazurile detectate ca ambigue:
 
 - NU începe analiza fără preflight reușit.
 - NU livra fișiere fără ca toate cele 6 (raw, sinteză MD+DOCX, Excel Declarație, Anexa 3, Anexa 4, Analiza încadrare IMM) să fie scrise.
-- NU bifează mai mult de o căsuță în Anexa 3.
+- NU bifa „autonomă" dacă firma e parteneră/legată; bifează TOATE categoriile aplicabile (o firmă poate fi și parteneră ȘI legată).
 - NU ghici % sau financiare lipsă — întotdeauna întreabă sau marchează NECUNOSCUT.
 - NU folosi `wb.save(template_path)` — întotdeauna `out_path` nou.
 - NU lăsa `procent` în coloana G ca string — întotdeauna ca decimal (`0.30` pentru 30%), formatul `0.00%` îl afișează corect.

@@ -11,6 +11,11 @@ import sys
 import zipfile
 from pathlib import Path
 
+try:  # consola Windows e cp1252 — evită UnicodeEncodeError la print cu diacritice
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 
 def main() -> int:
     root = Path(__file__).parent.resolve()

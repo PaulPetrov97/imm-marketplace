@@ -6,7 +6,7 @@ Marketplace privat Claude Code pentru consultanță RomActiv — pluginuri de au
 
 | Plugin | Versiune | Scop |
 |---|---|---|
-| `imm-analiza-ro` | 0.1.0 | Analiză preliminară de încadrare IMM (autonomă/parteneră/legată) conform Legii 346/2004 + Recomandării CE 2003/361/EC, cu scrape termene.ro prin Chrome MCP, completare automată Declarație IMM + Anexa 3 + Anexa 4, sinteză 1-3 pagini cu verdict |
+| `imm-analiza-ro` | 0.4.0 | Analiză preliminară de încadrare IMM (autonomă/parteneră/legată) conform Legii 346/2004 + Recomandării CE 2003/361/EC, cu scrape termene.ro prin Chrome MCP, completare automată Declarație IMM + Anexa 3 + Anexa 4, sinteză 1-3 pagini cu verdict |
 
 ---
 
@@ -15,7 +15,7 @@ Marketplace privat Claude Code pentru consultanță RomActiv — pluginuri de au
 În Claude Code:
 
 ```
-/plugin marketplace add github:paul-petrov/imm-marketplace
+/plugin marketplace add github:PaulPetrov97/imm-marketplace
 /plugin install imm-analiza-ro@imm-marketplace
 ```
 
@@ -27,7 +27,7 @@ Pentru update:
 
 ## Instalare — metoda 2 (zip, fără git)
 
-1. Descarcă `imm-analiza-ro-skill-v0.1.0.zip` (atașat în Releases sau primit prin email).
+1. Descarcă `imm-analiza-ro-skill-v0.4.0.zip` (atașat în Releases sau primit prin email).
 2. Extrage conținutul în `~/.claude/skills/imm-analiza-ro/` (sau `%USERPROFILE%\.claude\skills\imm-analiza-ro\` pe Windows).
 3. Repornește Claude Code.
 4. Verifică instalarea: scrie în Claude `/imm` — ar trebui să apară hint-ul comenzii.

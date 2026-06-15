@@ -196,46 +196,46 @@ def build_analiza_imm(
         ws.cell(row=r, column=13, value=f"curs euro BNR 31.12.{an}").font = _NORMAL
         jcell = ws.cell(row=r, column=14, value=curs)
         jcell.number_format = "0.0000"
-        curs_ref = f"$N${r}"
         r += 1
         for i, h in enumerate(FIN_HDRS):
             ws.cell(row=r, column=2 + i, value=h)
         _style_row(ws, r, 2, 11, fill=_SUBHDR_FILL, font=_BOLD, align=_CENTER)
         r += 1
-        data_first = r
+        sums = {c: 0.0 for c in range(3, 12)}  # C..K — totaluri numerice
         for row in yd["rows"]:
-            ws.cell(row=r, column=2, value=row["denumire"] + (" [EXCLUS]" if row.get("exclus") else ""))
-            ws.cell(row=r, column=3, value=row.get("angajati", "-"))
-            cl = ws.cell(row=r, column=4, value=row.get("ca_lei", 0))
-            cl.number_format = _FMT_LEI
-            al = ws.cell(row=r, column=5, value=row.get("active_lei", 0))
-            al.number_format = _FMT_LEI
-            fe = ws.cell(row=r, column=6, value=f"=D{r}/{curs_ref}")
-            fe.number_format = _FMT_LEI
-            ge = ws.cell(row=r, column=7, value=f"=E{r}/{curs_ref}")
-            ge.number_format = _FMT_LEI
-            hm = ws.cell(row=r, column=8, value=f"=D{r}/1000")
-            hm.number_format = _FMT_MII
-            im = ws.cell(row=r, column=9, value=f"=E{r}/1000")
-            im.number_format = _FMT_MII
-            jm = ws.cell(row=r, column=10, value=f"=F{r}/1000")
-            jm.number_format = _FMT_MII
-            km = ws.cell(row=r, column=11, value=f"=G{r}/1000")
-            km.number_format = _FMT_MII
+            excl = bool(row.get("exclus"))
+            ca_lei = float(row.get("ca_lei", 0) or 0)
+            act_lei = float(row.get("active_lei", 0) or 0)
+            ca_eur = ca_lei / curs if curs else 0.0
+            act_eur = act_lei / curs if curs else 0.0
+            ang = row.get("angajati", "-")
+            # euro & mii = NUMERE calculate (nu formule) — vizibile in orice viewer/PDF
+            vals = {
+                4: round(ca_lei, 2), 5: round(act_lei, 2),
+                6: round(ca_eur, 2), 7: round(act_eur, 2),
+                8: round(ca_lei / 1000, 3), 9: round(act_lei / 1000, 3),
+                10: round(ca_eur / 1000, 3), 11: round(act_eur / 1000, 3),
+            }
+            ws.cell(row=r, column=2, value=row["denumire"] + (" [EXCLUS]" if excl else ""))
+            ws.cell(row=r, column=3, value=ang)
+            for idx, v in vals.items():
+                cell = ws.cell(row=r, column=idx, value=v)
+                cell.number_format = _FMT_MII if idx >= 8 else _FMT_LEI
+            if not excl:
+                if isinstance(ang, (int, float)):
+                    sums[3] += ang
+                for idx, v in vals.items():
+                    sums[idx] += v
             _style_row(ws, r, 2, 11, font=_NORMAL, align=_WRAP)
             if row.get("nota"):
                 ws.cell(row=r, column=13, value=row["nota"]).font = Font(italic=True, size=8)
             r += 1
-        data_last = r - 1
-        incl_rows = [data_first + i for i, row in enumerate(yd["rows"]) if not row.get("exclus")]
+        # TOTAL = suma NUMERICA a randurilor luate in calcul (exclude [EXCLUS])
         ws.cell(row=r, column=2, value="TOTAL (intreprinderi luate in calcul)")
-        if incl_rows:
-            ws.cell(row=r, column=3, value=f"=SUM(C{data_first}:C{data_last})")
-            col_map = {"D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "I": 9, "J": 10, "K": 11}
-            for letter, idx in col_map.items():
-                terms = "+".join(f"{letter}{rr}" for rr in incl_rows)
-                cc = ws.cell(row=r, column=idx, value=f"={terms}")
-                cc.number_format = _FMT_MII if idx >= 8 else _FMT_LEI
+        ws.cell(row=r, column=3, value=int(round(sums[3])))
+        for idx in range(4, 12):
+            cc = ws.cell(row=r, column=idx, value=round(sums[idx], 3 if idx >= 8 else 2))
+            cc.number_format = _FMT_MII if idx >= 8 else _FMT_LEI
         _style_row(ws, r, 2, 11, fill=_TOTAL_FILL, font=_BOLD, align=_CENTER)
         r += 2
 

@@ -9,8 +9,9 @@ formatul intern RBC folosit la faza de contractare. Generat de
 
 Declarația IMM fixă suportă max 8 parteneri + 10 legate. Analiza de grup are număr
 variabil de firme și ani. De aceea acest output se **construiește de la zero** cu openpyxl,
-scalând la orice dimensiune. Coloanele derivate rămân **formule live** (`=lei/curs`,
-`/1000`), iar TOTAL-ul sumează doar întreprinderile luate în calcul (exclude firmele de
+scalând la orice dimensiune. Coloanele derivate (euro, mii) = **numere calculate** (`lei/curs`,
+`/1000`) — vizibile în orice viewer/PDF (openpyxl nu calculează formule, deci nu le lăsăm
+ca formule). TOTAL-ul sumează doar întreprinderile luate în calcul (exclude firmele de
 pe piețe neînvecinate / sub prag).
 
 ## Structura sheet-ului (5 secțiuni)
@@ -40,7 +41,7 @@ Câte un tabel pentru fiecare an analizat (tipic 3-4 ani: N-2 … N), fiecare cu
 `Denumire | Nr. angajati | CA (lei) | Active totale (lei) | CA (euro) | Active totale (euro) | CA (mii lei) | Active totale (mii lei) | CA (mii euro) | Active totale (mii euro)` + TOTAL.
 
 - **Active totale (lei)** = active imobilizate + active circulante + cheltuieli în avans.
-- **CA (euro)** = `=CA_lei / curs`; **mii** = `/1000` — toate FORMULE LIVE.
+- **CA (euro)** = `CA_lei / curs` (rotunjit 2 zecimale); **mii** = `/1000` (3 zecimale) — **numere calculate**, nu formule (ca să fie vizibile în orice viewer; curs = BNR 31 dec).
 - **curs euro** = cursul BNR din **ULTIMA ZI a anului** (31 decembrie) — vezi mai jos.
   NICIODATĂ curs mediu anual sau curs curent.
 - **TOTAL** = suma întreprinderilor LUATE ÎN CALCUL (firmele excluse — piață neînvecinată
