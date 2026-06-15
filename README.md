@@ -82,7 +82,7 @@ Output-ul ajunge în `<cwd>/analize-imm/<YYYY-MM-DD>_<CUI-solicitant>/`.
 
 ## Suport
 
-Contact: ecofin@consultant.com (Paul Petrov, RomActiv Business Consulting).
+Contact: paul.petrov@romactiv.ro (Paul Petrov, RomActiv Business Consulting).
 
 ## Licență
 
